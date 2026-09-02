@@ -20,6 +20,13 @@ e-posta gönderir; belirlenen süre içinde iptal etmezseniz otomatik yayınlan�
 ### 1) Anthropic API key
 console.anthropic.com → API Keys → yeni key oluşturun.
 
+### 1b) Logo dosyasını sitenize yükleyin
+Projede `logo.png` dosyası var (sitenizden çıkarıldı). Plesk Dosyalar
+bölümünden bunu sitenizin köküne (`httpdocs/logo.png` gibi) yükleyin, böylece
+her blog sayfası aynı büyük base64 metnini tekrar tekrar taşımaz. Yükledikten
+sonra `content_agent/publish_blog.py` içindeki `LOGO_URL` değerini gerçek
+adresle güncelleyin (örn. `https://www.plutonpdrm.com.tr/logo.png`).
+
 ### 2) fal.ai key (görsel üretimi için — FLUX.1 [dev] modeli)
 fal.ai/dashboard/keys → hesap açıp key alın. (~$0.025-0.03/görsel, günde 1
 görsel için ayda ~$1)
