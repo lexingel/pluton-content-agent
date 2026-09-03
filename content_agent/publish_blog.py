@@ -304,6 +304,38 @@ def _upload_file(ftp: FTP, local_path: Path):
         ftp.storbinary(f"STOR {local_path.name}", f)
 
 
+def _ig_images_remote_dir() -> str:
+    """Derives the /ig-images sibling folder from SFTP_REMOTE_BLOG_DIR
+    (e.g. /httpdocs/blog -> /httpdocs/ig-images)."""
+    parent = SFTP_REMOTE_BLOG_DIR.rsplit("/", 1)[0] or "/"
+    return f"{parent}/ig-images"
+
+
+def upload_image(local_path: Path) -> str:
+    """Uploads the generated illustration to a public folder on the site
+    (sibling of the blog folder) and returns its public URL -- Instagram's
+    API needs to fetch the image from a real public address."""
+    ftp = FTP()
+    ftp.connect(SFTP_HOST, 21, timeout=30)
+    ftp.login(SFTP_USER, SFTP_PASSWORD)
+    remote_dir = _ig_images_remote_dir()
+    try:
+        ftp.cwd(remote_dir)
+    except Exception:
+        try:
+            ftp.mkd(remote_dir)
+            ftp.cwd(remote_dir)
+        except Exception:
+            # last resort: try without a leading "httpdocs" (chroot cases)
+            stripped = re.sub(r"^/?(httpdocs/)?", "", remote_dir)
+            ftp.cwd("/" + stripped)
+    try:
+        _upload_file(ftp, local_path)
+    finally:
+        ftp.quit()
+    return f"https://www.plutonpdrm.com.tr/ig-images/{local_path.name}"
+
+
 def publish_blog_post(post: dict) -> str:
     """Builds the post, updates the manifest + index, uploads everything.
     Returns the live URL of the new post."""

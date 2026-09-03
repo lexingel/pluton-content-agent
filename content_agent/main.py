@@ -20,7 +20,7 @@ from pathlib import Path
 from generate_content import generate
 from generate_image import generate_image
 from notify import DELAY_HOURS, send_review_email
-from publish_blog import publish_blog_post
+from publish_blog import publish_blog_post, upload_image
 from publish_instagram import publish_to_instagram
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -57,11 +57,8 @@ def main():
     blog_url = publish_blog_post(post)
     print(f"    Blog published: {blog_url}")
 
-    # NOTE: Instagram needs the image at a public URL. Simplest approach:
-    # upload the image alongside the blog post (e.g. to /ig-images/ on your
-    # site) as part of publish_blog_post, then build that URL here. Left as
-    # a follow-up wiring step once your real site structure is confirmed.
-    image_public_url = f"https://plutonpdrm.com.tr/ig-images/{image_path.name}"
+    image_public_url = upload_image(image_path)
+    print(f"    Image uploaded: {image_public_url}")
     media_id = publish_to_instagram(image_public_url, post["ig_caption"])
     print(f"    Instagram published: {media_id}")
 
