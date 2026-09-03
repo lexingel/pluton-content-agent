@@ -73,12 +73,10 @@ tetikleyip loglardan takip edebilirsiniz.
 
 ## Hâlâ yapılması gerekenler (kodda TODO olarak işaretli)
 
-- `publish_blog.py`: `PAGE_TEMPLATE` gerçek sitenizin header/footer HTML'i ile
-  değiştirilmeli (siz bana gerçek sayfa HTML'ini gönderirseniz ben güncellerim)
-- `publish_blog.py`: blog index sayfasına yeni yazıyı otomatik ekleme adımı
-- `main.py`: üretilen görselin herkese açık bir URL'de barınması (Instagram
-  bunu görmek zorunda) — en basiti görseli blog yazısıyla birlikte
-  `/ig-images/` klasörüne de yüklemek
+- `publish_blog.py`: blog index sayfasına yeni yazıyı otomatik ekleme adımı ✅ artık otomatik (posts.json manifest üzerinden)
+- Görsel: artık `main.py` blog yayınından sonra otomatik olarak görseli
+  `/ig-images/` klasörüne yükler (klasör yoksa otomatik oluşturulur) ve o
+  genel URL'yi Instagram'a verir.
 
 ## Aylık maliyet tahmini
 
