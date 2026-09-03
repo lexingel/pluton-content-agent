@@ -1,18 +1,22 @@
 """
 Builds the blog post HTML page (matching site style), maintains a
 posts.json manifest of all posts, regenerates /blog/index.html from that
-manifest, and uploads everything to Plesk hosting via SFTP.
+manifest, and uploads everything to Plesk hosting via plain FTP.
 
-Requires: pip install paramiko
+Uses Python's built-in ftplib -- no extra dependency needed. (Switched
+from SFTP because many shared hosts disable external SSH access even
+when SFTP works inside the hosting panel's own file manager.)
+
 Requires env vars: SFTP_HOST, SFTP_USER, SFTP_PASSWORD, SFTP_REMOTE_BLOG_DIR
+(names kept as SFTP_* for continuity with existing GitHub Secrets, but
+these now configure a plain FTP connection.)
 """
 import io
 import json
 import os
 import re
+from ftplib import FTP
 from pathlib import Path
-
-import paramiko
 
 SFTP_HOST = os.environ.get("SFTP_HOST")
 SFTP_USER = os.environ.get("SFTP_USER")
@@ -267,25 +271,37 @@ def build_index_page(posts: list) -> Path:
     return local_path
 
 
-def _sftp_connect():
-    transport = paramiko.Transport((SFTP_HOST, 22))
-    transport.connect(username=SFTP_USER, password=SFTP_PASSWORD)
-    return paramiko.SFTPClient.from_transport(transport), transport
+def _ftp_connect() -> FTP:
+    ftp = FTP()
+    ftp.connect(SFTP_HOST, 21, timeout=30)
+    ftp.login(SFTP_USER, SFTP_PASSWORD)
+    try:
+        ftp.cwd(SFTP_REMOTE_BLOG_DIR)
+    except Exception:
+        # Some hosts chroot the FTP account straight into httpdocs, so a
+        # path like "/httpdocs/blog" won't exist -- retry with that prefix
+        # stripped (e.g. just "/blog" or "blog").
+        stripped = re.sub(r"^/?(httpdocs/)?", "", SFTP_REMOTE_BLOG_DIR)
+        ftp.cwd("/" + stripped)
+    return ftp
 
 
-def _download_manifest(sftp) -> list:
-    remote_path = f"{SFTP_REMOTE_BLOG_DIR}/{MANIFEST_FILENAME}"
+def _download_manifest(ftp: FTP) -> list:
     try:
         buf = io.BytesIO()
-        sftp.getfo(remote_path, buf)
+        ftp.retrbinary(f"RETR {MANIFEST_FILENAME}", buf.write)
         return json.loads(buf.getvalue().decode("utf-8"))
-    except (IOError, json.JSONDecodeError):
+    except Exception:
         return []  # no manifest yet (first run) or unreadable -- start fresh
 
 
-def _upload_bytes(sftp, data: bytes, remote_filename: str):
-    remote_path = f"{SFTP_REMOTE_BLOG_DIR}/{remote_filename}"
-    sftp.putfo(io.BytesIO(data), remote_path)
+def _upload_bytes(ftp: FTP, data: bytes, remote_filename: str):
+    ftp.storbinary(f"STOR {remote_filename}", io.BytesIO(data))
+
+
+def _upload_file(ftp: FTP, local_path: Path):
+    with open(local_path, "rb") as f:
+        ftp.storbinary(f"STOR {local_path.name}", f)
 
 
 def publish_blog_post(post: dict) -> str:
@@ -293,9 +309,9 @@ def publish_blog_post(post: dict) -> str:
     Returns the live URL of the new post."""
     post_path = build_post_page(post)
 
-    sftp, transport = _sftp_connect()
+    ftp = _ftp_connect()
     try:
-        manifest = _download_manifest(sftp)
+        manifest = _download_manifest(ftp)
         manifest = [p for p in manifest if p["slug"] != post["slug"]]  # dedupe
         manifest.append(
             {
@@ -309,16 +325,15 @@ def publish_blog_post(post: dict) -> str:
 
         index_path = build_index_page(manifest)
 
-        sftp.put(str(post_path), f"{SFTP_REMOTE_BLOG_DIR}/{post_path.name}")
-        sftp.put(str(index_path), f"{SFTP_REMOTE_BLOG_DIR}/{index_path.name}")
+        _upload_file(ftp, post_path)
+        _upload_file(ftp, index_path)
         _upload_bytes(
-            sftp,
+            ftp,
             json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8"),
             MANIFEST_FILENAME,
         )
     finally:
-        sftp.close()
-        transport.close()
+        ftp.quit()
 
     return f"https://www.plutonpdrm.com.tr/blog/{post_path.name}"
 
