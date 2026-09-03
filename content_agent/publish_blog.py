@@ -82,6 +82,7 @@ BASE_STYLE = """
   .back-link:hover { color: var(--teal-deep); }
   .blog-post { max-width: 760px; margin: 0 auto; }
   .post-date { color: var(--text-muted); font-size: 14px; margin: 8px 0 0; }
+  .post-cover { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 24px; margin: 24px 0 8px; box-shadow: var(--shadow); }
   .blog-post h2 { font-size: 1.4rem; font-weight: 600; margin: 40px 0 18px; }
   .blog-post p { color: var(--text-muted); font-size: 17px; margin: 0 0 18px; }
   .blog-post ul { padding-left: 20px; color: var(--text-muted); }
@@ -94,8 +95,10 @@ BASE_STYLE = """
   .page-head h1 { font-size: clamp(1.9rem, 3.6vw, 2.6rem); font-weight: 600; }
   .page-head p { color: var(--text-muted); font-size: 17px; margin-top: 12px; }
   .blog-grid { max-width: 900px; margin: 0 auto; display: grid; gap: 18px; }
-  .blog-card { display: block; background: var(--surface); border: 1px solid var(--border); border-radius: 22px; padding: 26px 28px; text-decoration: none; transition: transform 0.15s ease, box-shadow 0.15s ease; }
+  .blog-card { display: flex; gap: 20px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 22px; padding: 20px 26px; text-decoration: none; transition: transform 0.15s ease, box-shadow 0.15s ease; }
   .blog-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+  .blog-card .card-thumb { width: 84px; height: 84px; border-radius: 16px; object-fit: cover; flex-shrink: 0; }
+  .blog-card .card-text { min-width: 0; }
   .blog-card .card-date { color: var(--text-muted); font-size: 13.5px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
   .blog-card h2 { font-size: 1.2rem; font-weight: 600; margin: 8px 0 10px; }
   .blog-card p { color: var(--text-muted); font-size: 15.5px; margin: 0; }
@@ -185,12 +188,15 @@ POST_MAIN_TEMPLATE = """<main>
     <div class="blog-post">
       <h1>{title}</h1>
       <p class="post-date">{date}</p>
+      {cover_image}
       {body}
       <a class="btn btn-primary" href="https://www.plutonpdrm.com.tr/#iletisim">Randevu Alın</a>
     </div>
   </div>
 </main>
 """
+
+COVER_IMAGE_TEMPLATE = '<img class="post-cover" src="{image_url}" alt="{title}">'
 
 INDEX_MAIN_TEMPLATE = """<main>
   <div class="wrap">
@@ -206,10 +212,15 @@ INDEX_MAIN_TEMPLATE = """<main>
 """
 
 CARD_TEMPLATE = """<a class="blog-card" href="https://www.plutonpdrm.com.tr/blog/{slug}.html">
-        <div class="card-date">{date}</div>
-        <h2>{title}</h2>
-        <p>{excerpt}</p>
+        {thumb}
+        <div class="card-text">
+          <div class="card-date">{date}</div>
+          <h2>{title}</h2>
+          <p>{excerpt}</p>
+        </div>
       </a>"""
+
+CARD_THUMB_TEMPLATE = '<img class="card-thumb" src="{image_url}" alt="{title}">'
 
 
 def _excerpt(html_body: str, max_len: int = 160) -> str:
@@ -220,7 +231,12 @@ def _excerpt(html_body: str, max_len: int = 160) -> str:
     return text
 
 
-def build_post_page(post: dict) -> Path:
+def build_post_page(post: dict, image_url: str = "") -> Path:
+    cover_image = (
+        COVER_IMAGE_TEMPLATE.format(image_url=image_url, title=post["title"])
+        if image_url
+        else ""
+    )
     html = (
         PAGE_HEAD.format(
             page_title=f"{post['title']} | Plüton PDRM",
@@ -229,7 +245,10 @@ def build_post_page(post: dict) -> Path:
             logo_src=LOGO_URL,
         )
         + POST_MAIN_TEMPLATE.format(
-            title=post["title"], date=post["date"], body=post["blog_html_body"]
+            title=post["title"],
+            date=post["date"],
+            cover_image=cover_image,
+            body=post["blog_html_body"],
         )
         + PAGE_TAIL.format(logo_src=LOGO_URL)
     )
@@ -243,7 +262,15 @@ def build_index_page(posts: list) -> Path:
     if posts:
         cards = "\n      ".join(
             CARD_TEMPLATE.format(
-                slug=p["slug"], date=p["date"], title=p["title"], excerpt=p["excerpt"]
+                slug=p["slug"],
+                date=p["date"],
+                title=p["title"],
+                excerpt=p["excerpt"],
+                thumb=(
+                    CARD_THUMB_TEMPLATE.format(image_url=p["image_url"], title=p["title"])
+                    if p.get("image_url")
+                    else ""
+                ),
             )
             for p in posts
         )
@@ -336,10 +363,10 @@ def upload_image(local_path: Path) -> str:
     return f"https://www.plutonpdrm.com.tr/ig-images/{local_path.name}"
 
 
-def publish_blog_post(post: dict) -> str:
+def publish_blog_post(post: dict, image_url: str = "") -> str:
     """Builds the post, updates the manifest + index, uploads everything.
     Returns the live URL of the new post."""
-    post_path = build_post_page(post)
+    post_path = build_post_page(post, image_url=image_url)
 
     ftp = _ftp_connect()
     try:
@@ -351,6 +378,7 @@ def publish_blog_post(post: dict) -> str:
                 "title": post["title"],
                 "date": post["date"],
                 "excerpt": _excerpt(post["blog_html_body"]),
+                "image_url": image_url,
             }
         )
         manifest.sort(key=lambda p: p["date"], reverse=True)

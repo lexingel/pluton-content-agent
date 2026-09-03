@@ -54,11 +54,12 @@ def main():
         sys.exit(0)
 
     print("5/5 Publishing...")
-    blog_url = publish_blog_post(post)
-    print(f"    Blog published: {blog_url}")
-
     image_public_url = upload_image(image_path)
     print(f"    Image uploaded: {image_public_url}")
+
+    blog_url = publish_blog_post(post, image_url=image_public_url)
+    print(f"    Blog published: {blog_url}")
+
     media_id = publish_to_instagram(image_public_url, post["ig_caption"])
     print(f"    Instagram published: {media_id}")
 
