@@ -51,31 +51,76 @@ def _slugify(title: str) -> str:
 
 def generate() -> dict:
     """Returns dict with: topic, title, slug, blog_html_body, ig_caption, image_prompt"""
-    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
+    client_kwargs = {}
+    workspace_id = os.environ.get("ANTHROPIC_WORKSPACE_ID")
+    if workspace_id:
+        client_kwargs["default_headers"] = {"anthropic-workspace-id": workspace_id}
+    client = anthropic.Anthropic(**client_kwargs)  # reads ANTHROPIC_API_KEY from env
     topic = _next_topic()
 
     prompt = f"""{BRAND_RULES}
 
 Bugünün konusu: "{topic}"
 
-Aşağıdaki 3 içeriği üret ve SADECE geçerli JSON olarak döndür (başka hiçbir metin ekleme):
+Yukarıdaki kurallara uyarak bir blog yazısı, Instagram caption'ı ve görsel
+prompt'u üret. write_content aracını kullanarak sonucu ilet."""
 
-{{
-  "title": "Blog yazısının başlığı (kısa, ilgi çekici)",
-  "blog_html_body": "500-700 kelimelik blog yazısı, HTML paragraf etiketleri (<p>, <h2>, <ul><li>) ile biçimlendirilmiş. <h1> kullanma, başlık ayrı zaten veriliyor.",
-  "ig_caption": "Instagram için 80-150 kelimelik, sıcak ve davetkar bir caption. Sonunda 5-8 ilgili Türkçe hashtag ekle (#dehb, #ailedanismanligi gibi). Emoji ölçülü kullanılabilir.",
-  "image_prompt": "Bu blog yazısının Instagram görseli için, İngilizce, bir AI görsel üretim modeline verilecek 1-2 cümlelik betimleyici prompt. Sıcak, yumuşak renkli, illüstrasyon tarzı, gerçek insan yüzü/fotoğraf İÇERMEYEN, marka rengi soft/pastel bir görsel tarif et."
-}}"""
+    # Use tool-calling (structured output) instead of asking the model to
+    # hand-write JSON as text -- this guarantees valid, already-parsed
+    # output and avoids JSON-escaping failures on long HTML content.
+    tool = {
+        "name": "write_content",
+        "description": "Plüton PDRM için üretilen blog yazısı ve Instagram içeriğini kaydeder.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Blog yazısının başlığı (kısa, ilgi çekici)",
+                },
+                "blog_html_body": {
+                    "type": "string",
+                    "description": (
+                        "500-700 kelimelik blog yazısı, HTML paragraf etiketleri "
+                        "(<p>, <h2>, <ul><li>) ile biçimlendirilmiş. <h1> kullanma, "
+                        "başlık ayrı zaten veriliyor."
+                    ),
+                },
+                "ig_caption": {
+                    "type": "string",
+                    "description": (
+                        "Instagram için 80-150 kelimelik, sıcak ve davetkar bir "
+                        "caption. Sonunda 5-8 ilgili Türkçe hashtag ekle "
+                        "(#dehb, #ailedanismanligi gibi). Emoji ölçülü kullanılabilir."
+                    ),
+                },
+                "image_prompt": {
+                    "type": "string",
+                    "description": (
+                        "Bu blog yazısının Instagram görseli için, İngilizce, bir AI "
+                        "görsel üretim modeline verilecek 1-2 cümlelik betimleyici "
+                        "prompt. Sıcak, yumuşak renkli, illüstrasyon tarzı, gerçek "
+                        "insan yüzü/fotoğraf İÇERMEYEN, marka rengi soft/pastel bir "
+                        "görsel tarif et."
+                    ),
+                },
+            },
+            "required": ["title", "blog_html_body", "ig_caption", "image_prompt"],
+        },
+    }
 
     response = client.messages.create(
         model=MODEL,
         max_tokens=3000,
+        tools=[tool],
+        tool_choice={"type": "tool", "name": "write_content"},
         messages=[{"role": "user", "content": prompt}],
     )
 
-    raw = response.content[0].text.strip()
-    raw = re.sub(r"^```json\s*|\s*```$", "", raw.strip())
-    data = json.loads(raw)
+    tool_use_block = next(
+        block for block in response.content if block.type == "tool_use"
+    )
+    data = dict(tool_use_block.input)
 
     data["topic"] = topic
     data["slug"] = _slugify(data["title"])
