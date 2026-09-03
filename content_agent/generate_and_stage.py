@@ -8,6 +8,7 @@ Run by: .github/workflows/generate-content.yml
 Optional env var TOPIC: if set (the panel passes whatever you chose),
 generates about that specific topic instead of picking the next one
 from the round-robin list.
+Optional env var LENGTH: "short" (default) or "long".
 """
 import os
 from pathlib import Path
@@ -21,9 +22,10 @@ IMAGES_OUT_DIR = Path("build/images")
 
 def main():
     topic = os.environ.get("TOPIC", "")
+    length = os.environ.get("LENGTH", "short")
 
     print("1/3 Generating content...")
-    post = generate(topic=topic)
+    post = generate(topic=topic, length=length)
     print(f"    -> {post['title']}")
 
     print("2/3 Generating illustration...")

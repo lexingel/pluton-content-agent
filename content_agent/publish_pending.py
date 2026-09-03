@@ -41,6 +41,7 @@ def main():
         {
             "title": pending["title"],
             "topic": pending.get("topic", ""),
+            "length": pending.get("length", "short"),
             "date": pending["date"],
             "slug": pending["slug"],
             "blog_url": blog_url,

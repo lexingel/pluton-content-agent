@@ -122,7 +122,7 @@ tarafından oluşturulup güncellenir — elle bir şey yapmanıza gerek yok.
 ## Aylık maliyet tahmini
 
 - Claude API (metin): ~$1-3/ay
-- fal.ai / FLUX.1 [dev] (görsel): ~$0.75-1/ay
+- fal.ai / FLUX.1.1 [pro] (görsel): ~$1.50-1.80/ay
 - GitHub Actions: private repo'da ayda 2.000 dakika ücretsiz — artık
   workflow'lar beklemeden (sleep) çalıştığı için bu kota fazlasıyla yeterli
-- **Toplam: ~$2-4/ay**
+- **Toplam: ~$3-5/ay**

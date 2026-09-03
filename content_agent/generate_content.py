@@ -49,11 +49,43 @@ def _slugify(title: str) -> str:
     return re.sub(r"[\s-]+", "-", text)
 
 
-def generate(topic: str = "") -> dict:
+LENGTH_SPECS = {
+    "short": {
+        "label": "Kısa",
+        "word_range": "500-700",
+        "max_tokens": 3000,
+        "style_note": (
+            "Kısa, hızlı okunur, günlük sıcak dilde bir blog yazısı. Ailelere "
+            "sohbet eder gibi hitap et."
+        ),
+    },
+    "long": {
+        "label": "Uzun / Akademik",
+        "word_range": "1400-2000",
+        "max_tokens": 5000,
+        "style_note": (
+            "Daha kapsamlı ve derinlemesine, akademik bir üslupta ama hâlâ "
+            "ailelere hitap eden bir yazı. Konuyu birden fazla alt başlıkla "
+            "(en az 4-5 <h2>) ele al: tanım/arka plan, belirtiler veya "
+            "dinamikler, altta yatan psikolojik mekanizmalar, ailelerin "
+            "yapabilecekleri, ne zaman uzman desteği alınmalı gibi bölümler "
+            "olabilir. Genel psikolojik kavram ve çerçevelere değinebilirsin "
+            "ama UYDURMA istatistik, sayısal oran veya spesifik çalışma adı "
+            "EKLEME -- somut sayısal iddialarda bulunma, genel/niteliksel "
+            "ifadeler kullan."
+        ),
+    },
+}
+
+
+def generate(topic: str = "", length: str = "short") -> dict:
     """Returns dict with: topic, title, slug, blog_html_body, ig_caption, image_prompt.
     If `topic` is given (e.g. chosen by the user in the panel), it's used
-    as-is instead of picking the next one from the round-robin list."""
+    as-is instead of picking the next one from the round-robin list.
+    `length` is "short" (default, ~500-700 words) or "long" (~1400-2000
+    words, more academic in tone)."""
     topic = topic.strip() or _next_topic()
+    spec = LENGTH_SPECS.get(length, LENGTH_SPECS["short"])
     client_kwargs = {}
     workspace_id = os.environ.get("ANTHROPIC_WORKSPACE_ID")
     if workspace_id:
@@ -83,9 +115,10 @@ prompt'u üret. write_content aracını kullanarak sonucu ilet."""
                 "blog_html_body": {
                     "type": "string",
                     "description": (
-                        "500-700 kelimelik blog yazısı, HTML paragraf etiketleri "
-                        "(<p>, <h2>, <ul><li>) ile biçimlendirilmiş. <h1> kullanma, "
-                        "başlık ayrı zaten veriliyor."
+                        f"{spec['word_range']} kelimelik blog yazısı, HTML "
+                        "paragraf etiketleri (<p>, <h2>, <ul><li>) ile "
+                        f"biçimlendirilmiş. <h1> kullanma, başlık ayrı zaten "
+                        f"veriliyor. {spec['style_note']}"
                     ),
                 },
                 "ig_caption": {
@@ -100,10 +133,28 @@ prompt'u üret. write_content aracını kullanarak sonucu ilet."""
                     "type": "string",
                     "description": (
                         "Bu blog yazısının Instagram görseli için, İngilizce, bir AI "
-                        "görsel üretim modeline verilecek 1-2 cümlelik betimleyici "
-                        "prompt. Sıcak, yumuşak renkli, illüstrasyon tarzı, gerçek "
-                        "insan yüzü/fotoğraf İÇERMEYEN, marka rengi soft/pastel bir "
-                        "görsel tarif et."
+                        "görsel üretim modeline verilecek DETAYLI ve SPESİFİK bir "
+                        "prompt (4-6 cümle). Genel/soyut ifadelerden kaçın ("
+                        "\"warm illustration\" gibi tek başına yetersiz) -- somut bir "
+                        "SAHNE kur, DOĞRUDAN bu blog yazısının konusuyla ilgili "
+                        "(genel bir 'aile' görseli değil, tam olarak bu konuyu "
+                        "yansıtan bir an/metafor): örn. sınav kaygısı için bir "
+                        "çocuğun masasında oturmuş, önünde açık bir defter, "
+                        "pencereden gelen yumuşak ışık, yanında sakinleştirici bir "
+                        "bitki; ekran bağımlılığı için bir aile oyun masasında bir "
+                        "arada, tablet kapalı köşede duruyor, sıcak ışık. Şunları "
+                        "MUTLAKA belirt: (1) ana konu/sahne, somut nesnelerle, konuyla "
+                        "birebir bağlantılı, (2) kompozisyon (ön plan/arka plan, "
+                        "açı), (3) sanat stili (örn. 'modern children's book "
+                        "illustration', 'editorial illustration with rich linework "
+                        "and texture', 'flat design with layered depth'), (4) ışık "
+                        "ve atmosfer, (5) renk paleti (marka renkleri: yumuşak "
+                        "teal/mercan/altın tonları). ÇOCUK VE EBEVEYN DOSTU OLMALI: "
+                        "sıcak, umut verici, güven veren bir atmosfer -- asla ürkütücü, "
+                        "üzücü, kaygı verici veya rahatsız edici görseller/semboller "
+                        "kullanma (örn. ağlayan çocuk, karanlık/tekinsiz ortam, "
+                        "tehdit edici imgeler yasak). Gerçek insan yüzü/fotoğraf "
+                        "İÇERMEYEN, sıcak ve profesyonel bir illüstrasyon olmalı."
                     ),
                 },
             },
@@ -113,7 +164,7 @@ prompt'u üret. write_content aracını kullanarak sonucu ilet."""
 
     response = client.messages.create(
         model=MODEL,
-        max_tokens=3000,
+        max_tokens=spec["max_tokens"],
         tools=[tool],
         tool_choice={"type": "tool", "name": "write_content"},
         messages=[{"role": "user", "content": prompt}],
@@ -125,6 +176,7 @@ prompt'u üret. write_content aracını kullanarak sonucu ilet."""
     data = dict(tool_use_block.input)
 
     data["topic"] = topic
+    data["length"] = length
     data["slug"] = _slugify(data["title"])
     data["date"] = date.today().isoformat()
     return data
