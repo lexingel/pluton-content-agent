@@ -6,18 +6,18 @@ tarayıcıda önizleyip **Onayla** veya **Reddet** diyorsunuz.
 
 ## Nasıl çalışır
 
-Üç ayrı GitHub Actions workflow'u var:
+Üç ayrı GitHub Actions workflow'u var. Hepsi **sadece panelden tetiklendiğinde**
+çalışır — otomatik zamanlama (schedule) kapalı, tamamen sizin kontrolünüzde.
 
-**1. `fetch-trends.yml`** — her sabah otomatik (veya panelden "Trendleri
-   Yenile" ile elle) çalışır:
+**1. `fetch-trends.yml`** — panelden "Trendleri Yenile" ile çalıştırıldığında:
    - Claude'un web araması özelliğini kullanarak (ekstra API key gerekmez,
      mevcut Anthropic key'inizle) psikoloji/çocuk gelişimi/ebeveynlik
      alanında güncel 6-8 konu bulur
    - `panel/data/trends.json` olarak sitenize yükler
    - Ayrıca `topics.json` sabit listesini de panele senkronize eder
 
-**2. `generate-content.yml`** — her gün otomatik (veya panelden elle,
-   isteğe bağlı seçtiğiniz bir konuyla) çalışır:
+**2. `generate-content.yml`** — panelden "Yeni İçerik Üret" ile
+   çalıştırıldığında (isteğe bağlı seçtiğiniz bir konuyla):
    - Konu seçilmediyse `topics.json`'daki sıradaki konuyu otomatik alır
    - Claude API ile blog yazısı + Instagram caption üretir
    - fal.ai (FLUX.1 dev) ile illüstrasyon üretir, sitenize yükler

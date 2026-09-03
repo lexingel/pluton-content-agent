@@ -1,9 +1,6 @@
 name: Fetch Trends
 
 on:
-  schedule:
-    # 07:30 Türkiye saati (UTC+3) = 04:30 UTC -- before the daily generate run.
-    - cron: "30 4 * * *"
   workflow_dispatch: {}  # triggered by the panel's "Trendleri Yenile" button
 
 jobs:

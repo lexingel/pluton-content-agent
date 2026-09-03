@@ -1,9 +1,6 @@
 name: Generate Content
 
 on:
-  schedule:
-    # 08:00 Türkiye saati (UTC+3) = 05:00 UTC.
-    - cron: "0 5 * * *"
   workflow_dispatch:
     inputs:
       topic:
