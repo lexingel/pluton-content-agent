@@ -338,14 +338,16 @@ def _ig_images_remote_dir() -> str:
     return f"{parent}/ig-images"
 
 
-def upload_image(local_path: Path) -> str:
-    """Uploads the generated illustration to a public folder on the site
-    (sibling of the blog folder) and returns its public URL -- Instagram's
-    API needs to fetch the image from a real public address."""
-    ftp = FTP()
-    ftp.connect(SFTP_HOST, 21, timeout=30)
-    ftp.login(SFTP_USER, SFTP_PASSWORD)
-    remote_dir = _ig_images_remote_dir()
+def _panel_data_remote_dir() -> str:
+    """Derives the /panel/data sibling folder from SFTP_REMOTE_BLOG_DIR
+    (e.g. /httpdocs/blog -> /httpdocs/panel/data). This must match where
+    you upload the admin-panel/ folder in Plesk (panel lives at
+    httpdocs/panel/, so its data subfolder is httpdocs/panel/data)."""
+    parent = SFTP_REMOTE_BLOG_DIR.rsplit("/", 1)[0] or "/"
+    return f"{parent}/panel/data"
+
+
+def _cwd_with_fallback(ftp: FTP, remote_dir: str):
     try:
         ftp.cwd(remote_dir)
     except Exception:
@@ -353,14 +355,74 @@ def upload_image(local_path: Path) -> str:
             ftp.mkd(remote_dir)
             ftp.cwd(remote_dir)
         except Exception:
-            # last resort: try without a leading "httpdocs" (chroot cases)
             stripped = re.sub(r"^/?(httpdocs/)?", "", remote_dir)
             ftp.cwd("/" + stripped)
+
+
+def upload_image(local_path: Path) -> str:
+    """Uploads the generated illustration to a public folder on the site
+    (sibling of the blog folder) and returns its public URL -- Instagram's
+    API needs to fetch the image from a real public address."""
+    ftp = FTP()
+    ftp.connect(SFTP_HOST, 21, timeout=30)
+    ftp.login(SFTP_USER, SFTP_PASSWORD)
+    _cwd_with_fallback(ftp, _ig_images_remote_dir())
     try:
         _upload_file(ftp, local_path)
     finally:
         ftp.quit()
     return f"https://www.plutonpdrm.com.tr/ig-images/{local_path.name}"
+
+
+def upload_pending(pending: dict):
+    """Writes pending.json into the panel's data folder on the server, so
+    the PHP admin panel (reading the same file locally) can show it for
+    review."""
+    ftp = FTP()
+    ftp.connect(SFTP_HOST, 21, timeout=30)
+    ftp.login(SFTP_USER, SFTP_PASSWORD)
+    _cwd_with_fallback(ftp, _panel_data_remote_dir())
+    try:
+        _upload_bytes(
+            ftp,
+            json.dumps(pending, ensure_ascii=False, indent=2).encode("utf-8"),
+            "pending.json",
+        )
+    finally:
+        ftp.quit()
+
+
+def download_pending() -> dict | None:
+    """Reads pending.json back from the server. Returns None if there is
+    nothing pending (e.g. it was rejected, or already published)."""
+    ftp = FTP()
+    ftp.connect(SFTP_HOST, 21, timeout=30)
+    ftp.login(SFTP_USER, SFTP_PASSWORD)
+    _cwd_with_fallback(ftp, _panel_data_remote_dir())
+    try:
+        buf = io.BytesIO()
+        ftp.retrbinary("RETR pending.json", buf.write)
+        return json.loads(buf.getvalue().decode("utf-8"))
+    except Exception:
+        return None
+    finally:
+        ftp.quit()
+
+
+def delete_pending():
+    """Removes pending.json from the server once it's been published (or
+    to clean up after a reject, though the panel also does this locally
+    for an instant UI update)."""
+    ftp = FTP()
+    ftp.connect(SFTP_HOST, 21, timeout=30)
+    ftp.login(SFTP_USER, SFTP_PASSWORD)
+    _cwd_with_fallback(ftp, _panel_data_remote_dir())
+    try:
+        ftp.delete("pending.json")
+    except Exception:
+        pass
+    finally:
+        ftp.quit()
 
 
 def publish_blog_post(post: dict, image_url: str = "") -> str:
