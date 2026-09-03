@@ -18,12 +18,13 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install anthropic requests paramiko
+        run: pip install anthropic requests
 
       - name: Run pipeline
         working-directory: content_agent
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
           FAL_KEY: ${{ secrets.FAL_KEY }}
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
           SFTP_USER: ${{ secrets.SFTP_USER }}
@@ -34,5 +35,5 @@ jobs:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           NOTIFY_TO_ADDRESS: ${{ secrets.NOTIFY_TO_ADDRESS }}
-          PUBLISH_DELAY_HOURS: "0.05"
+          PUBLISH_DELAY_HOURS: "3"
         run: python main.py
