@@ -1,0 +1,32 @@
+name: Fetch Trends
+
+on:
+  schedule:
+    # 07:30 Türkiye saati (UTC+3) = 04:30 UTC -- before the daily generate run.
+    - cron: "30 4 * * *"
+  workflow_dispatch: {}  # triggered by the panel's "Trendleri Yenile" button
+
+jobs:
+  fetch-trends:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install anthropic requests
+
+      - name: Fetch trends and sync topics
+        working-directory: content_agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          SFTP_REMOTE_BLOG_DIR: ${{ secrets.SFTP_REMOTE_BLOG_DIR }}
+        run: python fetch_trends.py

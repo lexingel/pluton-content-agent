@@ -4,7 +4,12 @@ on:
   schedule:
     # 08:00 Türkiye saati (UTC+3) = 05:00 UTC.
     - cron: "0 5 * * *"
-  workflow_dispatch: {}  # triggered by the admin panel's "Yeni İçerik Üret" button
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: "Konu (boş bırakılırsa listeden otomatik seçilir)"
+        required: false
+        default: ""
 
 jobs:
   generate:
@@ -23,6 +28,7 @@ jobs:
       - name: Generate and stage content
         working-directory: content_agent
         env:
+          TOPIC: ${{ github.event.inputs.topic }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
           FAL_KEY: ${{ secrets.FAL_KEY }}

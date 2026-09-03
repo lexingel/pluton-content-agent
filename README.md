@@ -6,25 +6,37 @@ tarayıcıda önizleyip **Onayla** veya **Reddet** diyorsunuz.
 
 ## Nasıl çalışır
 
-Artık iki ayrı GitHub Actions workflow'u var:
+Üç ayrı GitHub Actions workflow'u var:
 
-**1. `generate-content.yml`** — her gün otomatik (veya panelden elle) çalışır:
-   - `generate_content.py` → Claude API ile blog yazısı + Instagram caption üretir
-   - `generate_image.py` → fal.ai (FLUX.1 dev) ile illüstrasyon üretir
-   - Görseli sitenize yükler, sonra her şeyi `panel/data/pending.json`
-     olarak sitenize yükler (henüz YAYINLAMAZ)
+**1. `fetch-trends.yml`** — her sabah otomatik (veya panelden "Trendleri
+   Yenile" ile elle) çalışır:
+   - Claude'un web araması özelliğini kullanarak (ekstra API key gerekmez,
+     mevcut Anthropic key'inizle) psikoloji/çocuk gelişimi/ebeveynlik
+     alanında güncel 6-8 konu bulur
+   - `panel/data/trends.json` olarak sitenize yükler
+   - Ayrıca `topics.json` sabit listesini de panele senkronize eder
 
-**2. `publish-approved.yml`** — sadece panelde "Onayla" butonuna
+**2. `generate-content.yml`** — her gün otomatik (veya panelden elle,
+   isteğe bağlı seçtiğiniz bir konuyla) çalışır:
+   - Konu seçilmediyse `topics.json`'daki sıradaki konuyu otomatik alır
+   - Claude API ile blog yazısı + Instagram caption üretir
+   - fal.ai (FLUX.1 dev) ile illüstrasyon üretir, sitenize yükler
+   - Her şeyi `panel/data/pending.json` olarak yükler (henüz YAYINLAMAZ)
+
+**3. `publish-approved.yml`** — sadece panelde "Onayla" butonuna
    bastığınızda çalışır:
-   - `pending.json`'ı okur
-   - Blogu Plesk'e yükler, `/blog/index.html`'i günceller
-   - Instagram'da paylaşır
-   - `pending.json`'ı siler
+   - `pending.json`'ı okur, blogu Plesk'e yükler, `/blog/index.html`'i
+     günceller, Instagram'da paylaşır
+   - `pending.json`'ı siler, `panel/data/history.json`'a bir kayıt ekler
 
-**Panel** (`admin-panel/` klasörü, ayrıca Plesk'e yüklenir — bu repo'nun
-parçası değil) sitenizde `plutonpdrm.com.tr/panel/` adresinde çalışır:
-şifreyle korumalı, bekleyen içeriği gösterir, Onayla/Reddet butonları var,
-ayrıca "Yeni İçerik Üret" butonuyla elle de tetikleyebilirsiniz.
+**Panel** (`plutonpdrm.com.tr/panel/`): şifreyle korumalı. Ana sayfada ya
+bekleyen bir içerik incelemenizi bekler (Onayla/Reddet), ya da "Yeni
+İçerik Üret" menüsü gösterilir — burada güncel trendlerden, standart konu
+listesinden birini seçebilir, ya da kendi konunuzu yazabilirsiniz. Üretim
+ve yayınlama sırasında sayfa 15 saniyede bir otomatik yenilenir, böylece
+elle yenilemeniz gerekmez. Onayladıktan hemen sonra panel otomatik olarak
+"Yeni İçerik Üret" menüsüne döner (arka planda yayınlama devam eder).
+"Geçmiş" sayfası, yayınlanan tüm içeriklerin bir kaydını tutar.
 
 ## Kurulum
 
@@ -96,6 +108,16 @@ tarafından yönetilmiyor — doğrudan Plesk'e elle yüklüyorsunuz, çünkü
 içinde şifreniz ve GitHub token'ınız gibi hassas bilgiler var
 (`config.php`). Panel kodunu güncellemem gerektiğinde size ayrı bir
 zip olarak vereceğim.
+
+**Önemli:** panel kodunu güncellerken sadece kod dosyalarını
+(`index.php`, `includes/`, `actions/`, `style.css`, `history.php`) üzerine
+yazın — `config.php` ve `data/` klasörünü ASLA yeni bir zip ile
+üzerine yazmayın, çünkü `config.php` sizin gerçek şifre/token'ınızı,
+`data/` klasörü ise gerçek bekleyen/geçmiş içeriklerinizi tutuyor.
+
+`data/` klasöründeki dosyalar (`pending.json`, `history.json`,
+`trends.json`, `topics.json`, `*.flag`) otomatik olarak workflow'lar
+tarafından oluşturulup güncellenir — elle bir şey yapmanıza gerek yok.
 
 ## Aylık maliyet tahmini
 

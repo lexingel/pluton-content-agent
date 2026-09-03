@@ -5,19 +5,25 @@ publish anything -- that only happens when you click Approve in the
 panel (which triggers publish_pending.py via GitHub Actions).
 
 Run by: .github/workflows/generate-content.yml
+Optional env var TOPIC: if set (the panel passes whatever you chose),
+generates about that specific topic instead of picking the next one
+from the round-robin list.
 """
+import os
 from pathlib import Path
 
 from generate_content import generate
 from generate_image import generate_image
-from publish_blog import upload_image, upload_pending
+from publish_blog import clear_generating_flag, upload_image, upload_pending
 
 IMAGES_OUT_DIR = Path("build/images")
 
 
 def main():
+    topic = os.environ.get("TOPIC", "")
+
     print("1/3 Generating content...")
-    post = generate()
+    post = generate(topic=topic)
     print(f"    -> {post['title']}")
 
     print("2/3 Generating illustration...")
@@ -28,6 +34,7 @@ def main():
     image_url = upload_image(image_path)
     pending = {**post, "image_url": image_url}
     upload_pending(pending)
+    clear_generating_flag()
     print(f"    Staged: {post['title']}")
     print("    Open the admin panel to review, approve, or reject it.")
 

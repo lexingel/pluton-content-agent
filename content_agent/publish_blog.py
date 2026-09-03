@@ -374,34 +374,30 @@ def upload_image(local_path: Path) -> str:
     return f"https://www.plutonpdrm.com.tr/ig-images/{local_path.name}"
 
 
-def upload_pending(pending: dict):
-    """Writes pending.json into the panel's data folder on the server, so
-    the PHP admin panel (reading the same file locally) can show it for
-    review."""
+def _panel_ftp() -> FTP:
     ftp = FTP()
     ftp.connect(SFTP_HOST, 21, timeout=30)
     ftp.login(SFTP_USER, SFTP_PASSWORD)
     _cwd_with_fallback(ftp, _panel_data_remote_dir())
+    return ftp
+
+
+def panel_upload_json(filename: str, data):
+    ftp = _panel_ftp()
     try:
         _upload_bytes(
-            ftp,
-            json.dumps(pending, ensure_ascii=False, indent=2).encode("utf-8"),
-            "pending.json",
+            ftp, json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"), filename
         )
     finally:
         ftp.quit()
 
 
-def download_pending() -> dict | None:
-    """Reads pending.json back from the server. Returns None if there is
-    nothing pending (e.g. it was rejected, or already published)."""
-    ftp = FTP()
-    ftp.connect(SFTP_HOST, 21, timeout=30)
-    ftp.login(SFTP_USER, SFTP_PASSWORD)
-    _cwd_with_fallback(ftp, _panel_data_remote_dir())
+def panel_download_json(filename: str):
+    """Returns the parsed JSON, or None if the file doesn't exist / isn't valid."""
+    ftp = _panel_ftp()
     try:
         buf = io.BytesIO()
-        ftp.retrbinary("RETR pending.json", buf.write)
+        ftp.retrbinary(f"RETR {filename}", buf.write)
         return json.loads(buf.getvalue().decode("utf-8"))
     except Exception:
         return None
@@ -409,20 +405,49 @@ def download_pending() -> dict | None:
         ftp.quit()
 
 
-def delete_pending():
-    """Removes pending.json from the server once it's been published (or
-    to clean up after a reject, though the panel also does this locally
-    for an instant UI update)."""
-    ftp = FTP()
-    ftp.connect(SFTP_HOST, 21, timeout=30)
-    ftp.login(SFTP_USER, SFTP_PASSWORD)
-    _cwd_with_fallback(ftp, _panel_data_remote_dir())
+def panel_delete(filename: str):
+    ftp = _panel_ftp()
     try:
-        ftp.delete("pending.json")
+        ftp.delete(filename)
     except Exception:
-        pass
+        pass  # fine if it doesn't exist
     finally:
         ftp.quit()
+
+
+def upload_pending(pending: dict):
+    """Writes pending.json into the panel's data folder, so the PHP admin
+    panel (reading the same file locally) can show it for review."""
+    panel_upload_json("pending.json", pending)
+
+
+def download_pending():
+    """Reads pending.json back from the server. Returns None if there is
+    nothing pending (e.g. it was rejected, or already published)."""
+    return panel_download_json("pending.json")
+
+
+def delete_pending():
+    """Removes pending.json once it's been published."""
+    panel_delete("pending.json")
+
+
+def clear_generating_flag():
+    """Clears the panel's 'generating...' banner once staging is done."""
+    panel_delete("generating.flag")
+
+
+def clear_publishing_flag():
+    """Clears the panel's 'publishing...' banner once publishing is done."""
+    panel_delete("publishing.flag")
+
+
+def record_history(entry: dict):
+    """Prepends a published post's summary to history.json, so the panel
+    can show a track record of everything that's gone out."""
+    history = panel_download_json("history.json") or []
+    history.insert(0, entry)
+    panel_upload_json("history.json", history)
 
 
 def publish_blog_post(post: dict, image_url: str = "") -> str:

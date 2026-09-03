@@ -49,14 +49,16 @@ def _slugify(title: str) -> str:
     return re.sub(r"[\s-]+", "-", text)
 
 
-def generate() -> dict:
-    """Returns dict with: topic, title, slug, blog_html_body, ig_caption, image_prompt"""
+def generate(topic: str = "") -> dict:
+    """Returns dict with: topic, title, slug, blog_html_body, ig_caption, image_prompt.
+    If `topic` is given (e.g. chosen by the user in the panel), it's used
+    as-is instead of picking the next one from the round-robin list."""
+    topic = topic.strip() or _next_topic()
     client_kwargs = {}
     workspace_id = os.environ.get("ANTHROPIC_WORKSPACE_ID")
     if workspace_id:
         client_kwargs["default_headers"] = {"anthropic-workspace-id": workspace_id}
     client = anthropic.Anthropic(**client_kwargs)  # reads ANTHROPIC_API_KEY from env
-    topic = _next_topic()
 
     prompt = f"""{BRAND_RULES}
 

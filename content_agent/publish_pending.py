@@ -1,13 +1,21 @@
 """
 Publishes whatever is currently staged in pending.json to the blog and
-Instagram, then clears it. Only runs when triggered (by the admin panel's
-Approve button, via GitHub's workflow_dispatch API).
+Instagram, then clears it and records it in history.json. Only runs when
+triggered (by the admin panel's Approve button, via GitHub's
+workflow_dispatch API).
 
 Run by: .github/workflows/publish-approved.yml
 """
 import sys
+from datetime import datetime, timezone
 
-from publish_blog import delete_pending, download_pending, publish_blog_post
+from publish_blog import (
+    clear_publishing_flag,
+    delete_pending,
+    download_pending,
+    publish_blog_post,
+    record_history,
+)
 from publish_instagram import publish_to_instagram
 
 
@@ -16,6 +24,7 @@ def main():
     pending = download_pending()
     if not pending:
         print("    Nothing pending -- was it already published or rejected?")
+        clear_publishing_flag()
         sys.exit(0)
     print(f"    -> {pending['title']}")
 
@@ -28,6 +37,20 @@ def main():
     print(f"    Instagram published: {media_id}")
 
     delete_pending()
+    record_history(
+        {
+            "title": pending["title"],
+            "topic": pending.get("topic", ""),
+            "date": pending["date"],
+            "slug": pending["slug"],
+            "blog_url": blog_url,
+            "image_url": pending.get("image_url", ""),
+            "ig_caption": pending["ig_caption"],
+            "ig_media_id": media_id,
+            "published_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    clear_publishing_flag()
     print("Done.")
 
 
