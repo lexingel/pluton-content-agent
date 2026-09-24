@@ -23,7 +23,7 @@ SFTP_USER = os.environ.get("SFTP_USER")
 SFTP_PASSWORD = os.environ.get("SFTP_PASSWORD")
 SFTP_REMOTE_BLOG_DIR = os.environ.get("SFTP_REMOTE_BLOG_DIR", "/httpdocs/blog")
 
-LOGO_URL = "https://www.plutonpdrm.com.tr/logo.png"  # see note in README.md re: uploading this once
+LOGO_URL = "https://www.plutonpdrm.com.tr/logo.png"
 MANIFEST_FILENAME = "posts.json"
 
 # ---------------------------------------------------------------------------
@@ -298,19 +298,63 @@ def build_index_page(posts: list) -> Path:
     return local_path
 
 
+# ---------------------------------------------------------------------------
+# FTP plumbing. _cwd_with_fallback is the single source of truth for
+# "cd into this remote dir, creating it (and retrying a stripped path for
+# chroot hosts) if it doesn't exist yet" -- every connect path below uses
+# it, so a deleted/missing folder anywhere (blog/, panel/data/, ig-images/)
+# self-heals on the next run instead of hard-failing.
+# ---------------------------------------------------------------------------
+
+
+def _cwd_with_fallback(ftp: FTP, remote_dir: str):
+    try:
+        ftp.cwd(remote_dir)
+        return
+    except Exception:
+        pass
+    # try creating it (parent must exist; if not, this raises too)
+    try:
+        ftp.mkd(remote_dir)
+        ftp.cwd(remote_dir)
+        return
+    except Exception:
+        pass
+    # last resort: some hosts chroot the FTP account straight into
+    # httpdocs, so an absolute "/httpdocs/..." path won't exist -- retry
+    # with that prefix stripped, creating it too if needed
+    stripped = "/" + re.sub(r"^/?(httpdocs/)?", "", remote_dir)
+    try:
+        ftp.cwd(stripped)
+    except Exception:
+        ftp.mkd(stripped)
+        ftp.cwd(stripped)
+
+
 def _ftp_connect() -> FTP:
     ftp = FTP()
     ftp.connect(SFTP_HOST, 21, timeout=30)
     ftp.login(SFTP_USER, SFTP_PASSWORD)
-    try:
-        ftp.cwd(SFTP_REMOTE_BLOG_DIR)
-    except Exception:
-        # Some hosts chroot the FTP account straight into httpdocs, so a
-        # path like "/httpdocs/blog" won't exist -- retry with that prefix
-        # stripped (e.g. just "/blog" or "blog").
-        stripped = re.sub(r"^/?(httpdocs/)?", "", SFTP_REMOTE_BLOG_DIR)
-        ftp.cwd("/" + stripped)
+    _cwd_with_fallback(ftp, SFTP_REMOTE_BLOG_DIR)
     return ftp
+
+
+def _panel_ftp() -> FTP:
+    ftp = FTP()
+    ftp.connect(SFTP_HOST, 21, timeout=30)
+    ftp.login(SFTP_USER, SFTP_PASSWORD)
+    _cwd_with_fallback(ftp, _panel_data_remote_dir())
+    return ftp
+
+
+def _ig_images_remote_dir() -> str:
+    parent = SFTP_REMOTE_BLOG_DIR.rsplit("/", 1)[0] or "/"
+    return f"{parent}/ig-images"
+
+
+def _panel_data_remote_dir() -> str:
+    parent = SFTP_REMOTE_BLOG_DIR.rsplit("/", 1)[0] or "/"
+    return f"{parent}/panel/data"
 
 
 def _download_manifest(ftp: FTP) -> list:
@@ -319,7 +363,7 @@ def _download_manifest(ftp: FTP) -> list:
         ftp.retrbinary(f"RETR {MANIFEST_FILENAME}", buf.write)
         return json.loads(buf.getvalue().decode("utf-8"))
     except Exception:
-        return []  # no manifest yet (first run) or unreadable -- start fresh
+        return []  # no manifest yet (first run, or it was deleted) -- start fresh
 
 
 def _upload_bytes(ftp: FTP, data: bytes, remote_filename: str):
@@ -329,34 +373,6 @@ def _upload_bytes(ftp: FTP, data: bytes, remote_filename: str):
 def _upload_file(ftp: FTP, local_path: Path):
     with open(local_path, "rb") as f:
         ftp.storbinary(f"STOR {local_path.name}", f)
-
-
-def _ig_images_remote_dir() -> str:
-    """Derives the /ig-images sibling folder from SFTP_REMOTE_BLOG_DIR
-    (e.g. /httpdocs/blog -> /httpdocs/ig-images)."""
-    parent = SFTP_REMOTE_BLOG_DIR.rsplit("/", 1)[0] or "/"
-    return f"{parent}/ig-images"
-
-
-def _panel_data_remote_dir() -> str:
-    """Derives the /panel/data sibling folder from SFTP_REMOTE_BLOG_DIR
-    (e.g. /httpdocs/blog -> /httpdocs/panel/data). This must match where
-    you upload the admin-panel/ folder in Plesk (panel lives at
-    httpdocs/panel/, so its data subfolder is httpdocs/panel/data)."""
-    parent = SFTP_REMOTE_BLOG_DIR.rsplit("/", 1)[0] or "/"
-    return f"{parent}/panel/data"
-
-
-def _cwd_with_fallback(ftp: FTP, remote_dir: str):
-    try:
-        ftp.cwd(remote_dir)
-    except Exception:
-        try:
-            ftp.mkd(remote_dir)
-            ftp.cwd(remote_dir)
-        except Exception:
-            stripped = re.sub(r"^/?(httpdocs/)?", "", remote_dir)
-            ftp.cwd("/" + stripped)
 
 
 def upload_image(local_path: Path) -> str:
@@ -372,14 +388,6 @@ def upload_image(local_path: Path) -> str:
     finally:
         ftp.quit()
     return f"https://www.plutonpdrm.com.tr/ig-images/{local_path.name}"
-
-
-def _panel_ftp() -> FTP:
-    ftp = FTP()
-    ftp.connect(SFTP_HOST, 21, timeout=30)
-    ftp.login(SFTP_USER, SFTP_PASSWORD)
-    _cwd_with_fallback(ftp, _panel_data_remote_dir())
-    return ftp
 
 
 def panel_upload_json(filename: str, data):
@@ -489,7 +497,7 @@ if __name__ == "__main__":
     demo_post = {
         "title": "Test Başlık",
         "date": "2026-09-03",
-        "blog_html_body": "<p>Test içerik. Bu bir deneme yazısıdır ve blog sayfasının nasıl göründüğünü kontrol etmek için kullanılır.</p>",
+        "blog_html_body": "<p>Test içerik.</p>",
         "slug": "test-baslik",
     }
     print(publish_blog_post(demo_post))
